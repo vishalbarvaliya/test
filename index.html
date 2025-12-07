@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Employee Badge Matcher (Static)</title>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <h2>Upload Employee Excel and Badge CSV</h2>
+
+    <label>Employee Excel File:</label>
+    <input type="file" id="excelFile" accept=".xlsx,.xls"><br><br>
+
+    <label>Badge CSV File:</label>
+    <input type="file" id="csvFile" accept=".csv"><br><br>
+
+    <button onclick="processFiles()">Generate Output</button>
+    <hr>
+    <a id="downloadLink" style="display:none;">Download Matched File</a>
+
+    <script>
+        let excelData = [];
+        let csvData = [];
+
+        function readFile(file, callback) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type:'array'});
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(sheet);
+                callback(json);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processFiles() {
+            const excelFile = document.getElementById('excelFile').files[0];
+            const csvFile = document.getElementById('csvFile').files[0];
+
+            if (!excelFile || !csvFile) {
+                alert("Please select both files");
+                return;
+            }
+
+            readFile(excelFile, (data) => {
+                excelData = data;
+                readFile(csvFile, (data2) => {
+                    csvData = data2;
+                    matchData();
+                });
+            });
+        }
+
+        function matchData() {
+            const matched = [];
+
+            const csvMap = {};
+            csvData.forEach(row => {
+                csvMap[row.xValue] = row.Badge_Photo_Uid;
+            });
+
+            excelData.forEach(row => {
+                const login = row['Employee Logon'];
+                if (csvMap[login]) {
+                    matched.push({
+                        "Employee Logon": login,
+                        "Badge_Photo_Uid": csvMap[login]
+                    });
+                }
+            });
+
+            if (matched.length === 0) {
+                alert("No matches found!");
+                return;
+            }
+
+            const worksheet = XLSX.utils.json_to_sheet(matched);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Matched");
+
+            const wbout = XLSX.write(workbook, {bookType:'xlsx', type:'array'});
+            const blob = new Blob([wbout], {type:'application/octet-stream'});
+
+            const link = document.getElementById('downloadLink');
+            link.href = URL.createObjectURL(blob);
+            link.download = "matched_output.xlsx";
+            link.style.display = 'inline';
+            link.textContent = "Download Matched File";
+        }
+    </script>
+</body>
+</html>
